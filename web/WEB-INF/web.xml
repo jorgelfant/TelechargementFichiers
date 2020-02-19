@@ -3,4 +3,36 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
          version="4.0">
+    <servlet>
+        <servlet-name>Download</servlet-name>
+        <servlet-class>com.sdzee.servlets.Download</servlet-class>
+        <init-param>
+            <param-name>chemin</param-name>
+            <param-value>/forderWrite/</param-value><!-- Chemin absolu dans C: -->
+        </init-param>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>Download</servlet-name>
+        <url-pattern>/fichiers/*</url-pattern>
+    </servlet-mapping>
+
+    <!--*************************************************************************************************************-->
+    <filter>
+        <filter-name>Set Character Encoding</filter-name>
+        <filter-class>org.apache.catalina.filters.SetCharacterEncodingFilter</filter-class>
+        <init-param>
+            <param-name>encoding</param-name>
+            <param-value>UTF-8</param-value>
+        </init-param>
+        <init-param>
+            <param-name>ignore</param-name>
+            <param-value>false</param-value>
+        </init-param>
+    </filter>
+    <filter-mapping>
+        <filter-name>Set Character Encoding</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
 </web-app>
