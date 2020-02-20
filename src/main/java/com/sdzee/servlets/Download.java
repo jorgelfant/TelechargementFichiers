@@ -104,13 +104,14 @@ public class Download extends HttpServlet {
             // Ouvre les flux
             entree = new BufferedInputStream(new FileInputStream(fichier), TAILLE_TAMPON);
             sortie = new BufferedOutputStream(response.getOutputStream(), TAILLE_TAMPON);
+            //renvoie une reponse http avec le fichier à en question à télécharger
 
             // Lit le fichier et écrit son contenu dans la réponse HTTP
             byte[] tampon = new byte[TAILLE_TAMPON];
             int longueur;
 
             while ((longueur = entree.read(tampon)) > 0) {// !=-1
-                sortie.write(tampon, 0, longueur);
+                sortie.write(tampon, 0, longueur);//flux de téléchargement
             }
         } finally {
             sortie.close();

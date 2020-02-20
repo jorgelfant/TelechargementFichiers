@@ -360,6 +360,121 @@ Ainsi, si je veux qu'un client puisse télécharger un fichier test.txt depuis m
 dans c:\fichiers ! Le client devra alors saisir l'URL http://localhost:8080/pro/fichiers/test.txt dans son navigateur
 et obtiendra le résultat suivant si le fichier existe bien sur mon serveur (voir la figure suivante).
 
+
+Et il obtiendra logiquement une erreur 404 si le fichier n'existe pas sur le serveur.
+
+De même, vous pouvez vérifier qu'il obtiendra la même erreur s'il essaie d'accéder à la servlet de téléchargement
+sans préciser un nom de fichier, via l'URL http://localhost:8080/pro/fichiers/.
+
+************************************************************************************************************************
+                                        Une solution plus simple
+************************************************************************************************************************
+
+Je vais maintenant vous faire découvrir une manière de faire, bien moins chronophage, mais qui n'existe que sur certains
+serveurs d'applications.
+
+En effet, si nous utilisions le serveur GlassFish en lieu et place de Tomcat, nous n'aurions tout bonnement pas besoin
+d'écrire une servlet dédiée au téléchargement de fichiers placés à l'extérieur du conteneur !
+
+***************************
+Comment est-ce possible ?
+***************************
+
+Eh bien il se trouve que le serveur d'Oracle est livré avec une fonctionnalité très intéressante qui permet littéralement
+de "monter" un répertoire externe au conteneur dans une application web : les Alternate Document Roots.
+
+Le principe est relativement simple : il s'agit d'un système qui permet de mettre en place une correspondance automatique
+entre des URL qui suivent un format particulier, et un répertoire du disque local sur lequel le serveur tourne.
+Par exemple, pour notre exemple il nous suffirait de définir que toute URL respectant le pattern/pro/fichiers/* pointe
+vers son équivalent c:\fichiers\*. La mise en place de ce mécanisme se fait via l'ajout d'une section dans l'équivalent
+du fichier web.xml sous GlassFish. Si vous utilisez ce serveur et souhaitez faire le test, je vous laisse parcourir la
+documentation du système pour plus d'informations, elle est en anglais mais reste très accessible, même pour un débutant.
+
+************************************************************************************************************************
+                                        L'etat d'un téléchargement
+***********************************************************************************************************************
+
+Notre précédente servlet vous paraît peut-être un peu compliquée, mais elle ne fait en réalité qu'obtenir un InputStream
+de la ressource désirée, et l'écrire dans l'OutputStream de la réponse HTTP, accompagné d'en-têtes modifiés. C'est une
+approche plutôt simpliste, car elle ne permet pas de connaître l'état du téléchargement en cours : autrement dit, en cas
+de coupure côté client il est impossible de lui proposer la reprise d'un téléchargement en cours.
+
+Pourtant, lorsqu'un utilisateur télécharge un fichier massif et subit un problème de réseau quelconque en cours de route,
+par exemple à 99% du fichier... il aimerait bien que nous ayons sauvegardé l'état de son précédent téléchargement, et
+que nous lui proposions à son retour de poursuivre là où il s'était arrêté, et de télécharger uniquement le 1% restant !
+
+**************************************************
+Comment proposer la reprise d'un téléchargement ?
+**************************************************
+
+Le principe se corse un peu dès lors qu'on souhaite proposer ce type de service. Depuis notre servlet, il faudrait
+manipuler au minimum trois nouveaux en-têtes de la réponse HTTP afin d'activer cette fonctionnalité.
+
+      * Accept-Ranges : cet en-tête de réponse, lorsqu'il contient la valeur "bytes", informe le client que le serveur
+        supporte les requêtes demandant une plage définie de données. Avec cette information, le client peut alors demander
+        une section particulière d'un fichier à travers l'en-tête de requête Range.
+
+      * ETag : cet en-tête de réponse doit contenir une valeur unique permettant d'identifier le fichier concerné.
+        Il est possible d'utiliser le système de votre choix, il n'y a aucune contrainte : tout ce qui importe, c'est
+        que chacune des valeurs associées à un fichier soit unique. Certains serveurs utilisent par exemple l'algorithme
+        MD5 pour générer un hash basé sur le contenu du fichier, d'autres utilisent une combinaison d'informations à
+        propos du fichier (son nom, sa taille, sa date de modification, etc.), d'autres génèrent un hash de cette
+        combinaison... Avec cette information, le client peut alors renvoyer l'identifiant obtenu au serveur à travers
+        l'en-tête de requête If-Match ou If-Range, et le serveur peut alors déterminer de quel fichier il est question.
+
+      * Last-Modified : cet en-tête de réponse doit contenir un timestamp, qui représente la date de la dernière
+        modification du fichier côté serveur. Avec cette information, le client peut alors renvoyer le timestamp obtenu
+        au serveur à travers l'en-tête de requête If-Unmodified-Since, ou bien là encore If-Range.
+
+  À propos de ce dernier en-tête, note importante : un timestamp Java est précis à la milliseconde près, alors que
+  le timestamp attendu dans l'en-tête n'est précis qu'à la seconde près. Afin de combler cet écart d'incertitude,
+  il est donc nécessaire d'ajouter une seconde à la date de modification retournée par le client dans sa requête,
+  avant de la traiter.
+
+Bref, vous l'aurez compris la manœuvre devient vite bien plus compliquée dès lors que l'on souhaite réaliser quelque
+chose de plus évolué et user-friendly ! Il n'est rien d'insurmontable pour vous, mais ce travail requiert de la patience,
+une bonne lecture du protocole HTTP, une bonne logique de traitement dans votre servlet et enfin une campagne de tests
+très poussée, afin de ne laisser passer aucun cas particulier ni aucune erreur. Quoi qu'il en soit, vous avez ici toutes
+les informations clés pour mettre en place un tel système !
+
+En ce qui nous concerne, nous allons, dans le cadre de ce cours, nous contenter de notre servlet simpliste, le principe
+y est posé et l'intérêt pédagogique d'un système plus complexe serait d'autant plus faible. ^^
+
+************************************************************************************************************************
+                                         Réaliser des statistiques
+************************************************************************************************************************
+
+Avec notre servlet en place, nous avons centralisé la gestion des fichiers demandés par les clients, qui passent
+dorénavant tous par cette unique passerelle de sortie. Si vous envisagez dans une application de réaliser des
+statistiques sur les téléchargements effectués par les utilisateurs, il est intuitif d'envisager la modification
+de cette servlet pour qu'elle relève les données souhaitées : combien de téléchargements par fichier, combien de
+fichiers par utilisateur, combien de téléchargements simultanés, la proportion d'images téléchargées par rapport
+aux autres types de fichiers, etc. Bref, n'importe quelle information dont vous auriez besoin.
+
+Seulement comme vous le savez, nous essayons de garder nos contrôleurs les plus légers possibles, et de suivre au
+mieux MVC. Voilà pourquoi cette servlet, unique dans l'application, ne va en réalité pas se charger de cette tâche.
+
+**************************************************
+Dans ce cas, où réaliser ce type de traitements ?
+**************************************************
+
+Si vous réfléchissez bien à cette problématique, la solution est évidente : le composant idéal pour s'occuper de
+ce type de traitements, c'est le filtre ! Il suffit en effet d'en appliquer un sur le pattern/fichiers/* pour que
+celui-ci ait accès à toutes les demandes de téléchargement effectuées par les clients. Le nombre et la complexité
+des traitements qu'il devra réaliser dépendront bien évidemment des informations que vous souhaitez collecter.
+En ce qui concerne la manière, vous savez déjà que tout va passer par la méthode doFilter() du filtre en question...
+
+     * Le téléchargement de fichiers peut être géré simplement via une servlet dédiée, chargée de faire la correspondance
+       entre le pattern d'URL choisi côté public et l'emplacement du fichier physique côté serveur.
+
+     * Elle se charge de transmettre les données lues sur le serveur au navigateur du client via la réponse HTTP.
+
+     * Pour permettre un tel transfert, il faut réinitialiser une réponse HTTP, puis définir ses en-têtes Content-Type,
+       Content-Length et Content-Disposition.
+
+     * Pour envoyer les données au client, il suffit de lire le fichier comme n'importe quel fichier local et de recopier
+       son contenu dans le flux de sortie accessible via la méthode response.getOutputStream().
+
 --%>
 
 
