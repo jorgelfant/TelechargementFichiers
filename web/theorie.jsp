@@ -220,8 +220,111 @@ null :
                 }
                 -------------------------------------------------------------------------------
 
+Pour information, les types de fichiers sont déterminés par le conteneur lui-même. Lorsque le conteneur reçoit une
+requête demandant un fichier et qu'il le trouve, il le renvoie au client. Dans la réponse HTTP retournée, il renseigne
+alors l'en-tête Content-Type. Pour ce faire, il se base sur les types MIME dont il a connaissance, en fonction de
+l'extension du fichier à retourner. Ces types sont spécifiés dans le fichier web.xml global du conteneur, qui est
+situé dans le répertoire /conf/ du Tomcat Home. Si vous l'éditez, vous verrez qu'il en contient déjà une bonne quantité !
+En voici un court extrait :
 
+                                     ---------------------------------------
+                                     <mime-mapping>
+                                         <extension>jpeg</extension>
+                                         <mime-type>image/jpeg</mime-type>
+                                     </mime-mapping>
+                                     <mime-mapping>
+                                         <extension>jpg</extension>
+                                         <mime-type>image/jpeg</mime-type>
+                                     </mime-mapping>
+                                     ---------------------------------------
 
+************************************************************************************************************************
+Ainsi, il est possible d'ajouter un type inconnu au serveur, il suffit pour cela d'ajouter une section <mime-mapping>
+au fichier. De même, il est possible d'apporter de telles modifications sur le web.xml de votre projet web, afin de
+limiter l'impact des changements effectués à votre application uniquement, et non pas à toute instance de Tomcat lancée
+sur votre poste.
+
+Bref, dans notre cas nous n'allons pas nous embêter : nous nous contentons de spécifier un type par défaut si
+l'extension du fichier demandée est inconnu
+
+******************************
+Génération de la réponse HTTP
+******************************
+
+Après tous ces petits traitements, nous avons maintenant tout en main pour initialiser une réponse HTTP et y renseigner
+les en-têtes nécessaires, à savoir :
+
+Content-Type ;
+
+Content-Length ;
+
+Content-Disposition.
+
+Voici donc le code en charge de l'initialisation de la réponse :
+
+                ------------------------------------------------------------------
+                private static final int DEFAULT_BUFFER_SIZE = 10240; // 10 ko
+
+                ...
+
+                /* Initialise la réponse HTTP */
+                response.reset();
+                response.setBufferSize( DEFAULT_BUFFER_SIZE );
+                response.setContentType( type );
+                response.setHeader( "Content-Length", String.valueOf( fichier.length() ) );
+                response.setHeader( "Content-Disposition", "attachment; filename=\"" + fichier.getName() + "\"" );
+                ------------------------------------------------------------------------------------------------
+
+Voici quelques explications sur l'enchaînement ici réalisé :
+***********************************************************
+
+        *reset() : efface littéralement l'intégralité du contenu de la réponse initiée par le conteneur ;
+
+        *setBufferSize() : méthode à appeler impérativement après un reset() ;
+
+        *setContentType() : spécifie le type des données contenues dans la réponse ;
+
+        *nous retrouvons ensuite les deux en-têtes HTTP, qu'il faut construire "à la main" via des appels à setHeader().
+
+****************************
+Lecture et envoi du fichier
+****************************
+
+Nous arrivons enfin à la dernière étape du processus : la lecture du flux et l'envoi au client ! Commençons par mettre
+en place proprement l'ouverture des flux :
+
+                  ------------------------------------------------------------------------------------
+                  /* Prépare les flux */
+                  BufferedInputStream entree = null;
+                  BufferedOutputStream sortie = null;
+                  try {
+                      /* Ouvre les flux */
+                      entree = new BufferedInputStream( new FileInputStream( fichier ), TAILLE_TAMPON );
+                      sortie = new BufferedOutputStream( response.getOutputStream(), TAILLE_TAMPON );
+
+                      /* ... */
+                  } finally {
+                      try {
+                          sortie.close();
+                      } catch ( IOException ignore ) {
+                      }
+                      try {
+                          entree.close();
+                      } catch ( IOException ignore ) {
+                      }
+                  }
+                 ------------------------------------------------------------------------------------
+
+Nous pourrions ici très bien utiliser directement les flux de type FileInputStream et ServletOutputStream, mais les
+objets BufferedInputStream et BufferedOutputStream permettent via l'utilisation d'une mémoire tampon une gestion plus
+souple de la mémoire disponible sur le serveur :
+
+dans le flux entree, nous ouvrons un FileInputStream sur le fichier demandé. Nous décorons ensuite ce flux avec un
+BufferedInputStream, avec ici un tampon de la même taille que le tampon mis en place sur la réponse HTTP ;
+
+dans le flux sortie, nous récupérons directement le ServletOutpuStream depuis la méthode getOutputStream() de l'objet
+HttpServletResponse. Nous décorons ensuite ce flux avec un BufferedOutputStream, avec là encore un tampon de la même
+taille que le tampon mis en place sur la réponse HTTP.
 --%>
 
 
