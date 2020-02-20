@@ -12,9 +12,7 @@ import javax.servlet.http.HttpServletResponse;
 
 public class Download extends HttpServlet {
 
-    private static final int DEFAULT_BUFFER_SIZE = 10240; // 10 ko
-
-    private static final int TAILLE_TAMPON = 10240;
+    private static final int TAILLE_TAMPON = 10240;// 10 ko
 
     public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         // Lecture du paramètre 'chemin' passé à la servlet via la déclaration dans le web.xml
@@ -22,7 +20,7 @@ public class Download extends HttpServlet {
         // Récupération du chemin du fichier demandé au sein de l'URL de la requête
         String fichierRequis = request.getPathInfo();
         // Vérifie qu'un fichier a bien été fourni
-        if (fichierRequis == null || "/".equals(fichierRequis)) {
+        if (fichierRequis == null) {
             /* Si non, alors on envoie une erreur 404, qui signifie que la ressource demandée n'existe pas */
             response.sendError(HttpServletResponse.SC_NOT_FOUND);
             return;//return ici permet de sortir de la méthode sans exécuter ce qui vient après cette mot clé
@@ -79,7 +77,7 @@ public class Download extends HttpServlet {
 
         // Initialise la réponse HTTP
         response.reset();
-        response.setBufferSize(DEFAULT_BUFFER_SIZE);// private static final int DEFAULT_BUFFER_SIZE = 10240; // 10 ko
+        response.setBufferSize(TAILLE_TAMPON);// private static final int DEFAULT_BUFFER_SIZE = 10240; // 10 ko
         response.setContentType(type);
         response.setHeader("Content-Length", String.valueOf(fichier.length()));//
         response.setHeader("Content-Disposition", "attachment; filename=\"" + fichier.getName() + "\"");
@@ -99,24 +97,24 @@ public class Download extends HttpServlet {
         // Nous arrivons enfin à la dernière étape du processus : la lecture du flux et l'envoi au client !
         // Commençons par mettre en place proprement l'ouverture des flux :
 
-        /* Prépare les flux */
+        // Prépare les flux
         BufferedInputStream entree = null;
         BufferedOutputStream sortie = null;
         try {
-            /* Ouvre les flux */
-            entree = new BufferedInputStream( new FileInputStream( fichier ), TAILLE_TAMPON );
-            sortie = new BufferedOutputStream( response.getOutputStream(), TAILLE_TAMPON );
+            // Ouvre les flux
+            entree = new BufferedInputStream(new FileInputStream(fichier), TAILLE_TAMPON);
+            sortie = new BufferedOutputStream(response.getOutputStream(), TAILLE_TAMPON);
 
-            /* ... */
+            // Lit le fichier et écrit son contenu dans la réponse HTTP
+            byte[] tampon = new byte[TAILLE_TAMPON];
+            int longueur;
+
+            while ((longueur = entree.read(tampon)) > 0) {// !=-1
+                sortie.write(tampon, 0, longueur);
+            }
         } finally {
-            try {
-                sortie.close();
-            } catch ( IOException ignore ) {
-            }
-            try {
-                entree.close();
-            } catch ( IOException ignore ) {
-            }
+            sortie.close();
+            entree.close();
         }
     }
 }
